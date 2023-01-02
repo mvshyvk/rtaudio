@@ -4355,6 +4355,7 @@ MIDL_INTERFACE( "00000000-0000-0000-0000-000000000000" ) IAudioClient3
 {
   virtual HRESULT GetSharedModeEnginePeriod( WAVEFORMATEX*, UINT32*, UINT32*, UINT32*, UINT32* ) = 0;
   virtual HRESULT InitializeSharedAudioStream( DWORD, UINT32, WAVEFORMATEX*, LPCGUID ) = 0;
+  virtual HRESULT Release() = 0;
 };
 #ifdef __CRT_UUID_DECL
 __CRT_UUID_DECL( IAudioClient3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 )
@@ -5208,11 +5209,11 @@ void RtApiWasapi::closeStream( void )
   }
 
   // clean up stream memory
+  SAFE_RELEASE(((WasapiHandle*)stream_.apiHandle)->captureClient)
+  SAFE_RELEASE(((WasapiHandle*)stream_.apiHandle)->renderClient)
+
   SAFE_RELEASE( ( ( WasapiHandle* ) stream_.apiHandle )->captureAudioClient )
   SAFE_RELEASE( ( ( WasapiHandle* ) stream_.apiHandle )->renderAudioClient )
-
-  SAFE_RELEASE( ( ( WasapiHandle* ) stream_.apiHandle )->captureClient )
-  SAFE_RELEASE( ( ( WasapiHandle* ) stream_.apiHandle )->renderClient )
 
   if ( ( ( WasapiHandle* ) stream_.apiHandle )->captureEvent )
     CloseHandle( ( ( WasapiHandle* ) stream_.apiHandle )->captureEvent );
@@ -5665,6 +5666,7 @@ void RtApiWasapi::wasapiThread()
                                                                MinPeriodInFrames,
                                                                captureFormat,
                                                                NULL );
+        SAFE_RELEASE(captureAudioClient3);
       }
       else
       {
@@ -5776,6 +5778,7 @@ void RtApiWasapi::wasapiThread()
                                                               MinPeriodInFrames,
                                                               renderFormat,
                                                               NULL );
+        SAFE_RELEASE(renderAudioClient3);
       }
       else
       {

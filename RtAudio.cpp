@@ -5523,7 +5523,11 @@ bool RtApiWasapi::probeDeviceOpen( unsigned int deviceId, StreamMode mode, unsig
   else
     stream_.callbackInfo.priority = 0;
 
-  ///! TODO: RTAUDIO_MINIMIZE_LATENCY // Provide stream buffers directly to callback
+  // If RTAUDIO_MINIMIZE_LATENCY isn't set and numberOfBuffers is greatter than 1 then we will use
+  // IAudioClient interface with extended buffering instead of low-latency IAudioClient3
+  if (options && !(options->flags & RTAUDIO_MINIMIZE_LATENCY) && options->numberOfBuffers > 1)
+    stream_.nBuffers = options->numberOfBuffers;
+
   ///! TODO: RTAUDIO_HOG_DEVICE       // Exclusive mode
 
   methodResult = SUCCESS;
@@ -5647,7 +5651,11 @@ void RtApiWasapi::wasapiThread()
 
     if ( !captureClient ) {
       IAudioClient3* captureAudioClient3 = nullptr;
-      captureAudioClient->QueryInterface( __uuidof( IAudioClient3 ), ( void** ) &captureAudioClient3 );
+
+      // Use IAudioClient3 interface in case if low-latency stream is required
+      if ( stream_.nBuffers == 1 )
+        captureAudioClient->QueryInterface( __uuidof( IAudioClient3 ), ( void** ) &captureAudioClient3 );
+
       if ( captureAudioClient3 && !loopbackEnabled )
       {
         UINT32 Ignore;
@@ -5670,9 +5678,11 @@ void RtApiWasapi::wasapiThread()
       }
       else
       {
+        constexpr unsigned mult10M = 10000000; // 10^7
+        float bufferInSeconds = float(stream_.bufferSize * stream_.nBuffers) / float(stream_.sampleRate);
         hr = captureAudioClient->Initialize( AUDCLNT_SHAREMODE_SHARED,
                                              loopbackEnabled ? AUDCLNT_STREAMFLAGS_LOOPBACK : AUDCLNT_STREAMFLAGS_EVENTCALLBACK,
-                                             0,
+                                             REFERENCE_TIME(bufferInSeconds * mult10M),
                                              0,
                                              captureFormat,
                                              NULL );
@@ -5759,7 +5769,11 @@ void RtApiWasapi::wasapiThread()
 
     if ( !renderClient ) {
       IAudioClient3* renderAudioClient3 = nullptr;
-      renderAudioClient->QueryInterface( __uuidof( IAudioClient3 ), ( void** ) &renderAudioClient3 );
+     
+      // Use IAudioClient3 interface in case if low-latency stream is required
+      if ( stream_.nBuffers == 1 )
+        renderAudioClient->QueryInterface(__uuidof(IAudioClient3), (void**)&renderAudioClient3);
+
       if ( renderAudioClient3 )
       {
         UINT32 Ignore;
@@ -5782,9 +5796,11 @@ void RtApiWasapi::wasapiThread()
       }
       else
       {
+        constexpr unsigned mult10M = 10000000; // 10^7
+        float bufferInSeconds = float(stream_.bufferSize * stream_.nBuffers) / float(stream_.sampleRate);
         hr = renderAudioClient->Initialize( AUDCLNT_SHAREMODE_SHARED,
                                             AUDCLNT_STREAMFLAGS_EVENTCALLBACK,
-                                            0,
+                                            REFERENCE_TIME(bufferInSeconds * mult10M),
                                             0,
                                             renderFormat,
                                             NULL );
